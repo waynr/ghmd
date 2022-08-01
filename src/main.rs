@@ -99,29 +99,31 @@ fn main() -> Result<()> {
         ])
         .get_matches();
 
+    let mut config = Config::load()?;
+
     match matches.subcommand() {
-        ("set-dir", Some(set_dir_matches)) => {
+        ("add-dir", Some(set_dir_matches)) => {
             let dir_path = set_dir_matches.value_of("directory").unwrap();
-            add_dir(dir_path)?
+            add_dir(&mut config, dir_path)?
         },
-        ("stow", Some(stow_matches)) => stow(stow_matches)?,
-        ("deploy", Some(deploy_matches)) => deploy(deploy_matches)?,
-        ("restore", Some(restore_matches)) => restore(restore_matches)?,
+        ("stow", Some(stow_matches)) => stow(config, stow_matches)?,
+        ("deploy", Some(deploy_matches)) => deploy(config, deploy_matches)?,
+        ("restore", Some(restore_matches)) => restore(&mut config, restore_matches)?,
         _ => {},
     }
     Ok(())
 }
 
-fn add_dir<P: AsRef<Path>>(path: P) -> Result<()> {
+fn add_dir<P: AsRef<Path>>(config: &mut Config, path: P) -> Result<()> {
     let path = path.as_ref().to_path_buf();
 
-    Config::add_dir(path)?;
+    config.add_dir(path)?;
 
     println! {"dotfiles path successfully added"};
     Ok(())
 }
 
-fn stow(values: &ArgMatches) -> Result<()> {
+fn stow(config: Config, values: &ArgMatches) -> Result<()> {
     let mut input_paths = vec![];
 
     for path in values.values_of("files").unwrap() {
@@ -132,15 +134,15 @@ fn stow(values: &ArgMatches) -> Result<()> {
     }
 
     for path in input_paths.into_iter() {
-        let dst_path = commands::store_dotfile(&path)?;
+        let dst_path = commands::store_dotfile(&config, &path)?;
         commands::deploy_dotfile(&dst_path, &path)?;
     }
     Ok(())
 }
 
-fn deploy(values: &ArgMatches) -> Result<()> {
-    println!("inside of deploy");
-    let dotfiles_dir = Config::get_dots_dir()?;
+fn deploy(config: Config, values: &ArgMatches) -> Result<()> {
+    println!("deploying dotfiles");
+    let dotfiles_dir = config.get_dots_dir();
 
     let dotfiles = if values.is_present("all") {
         DirScanner::default()
@@ -172,41 +174,7 @@ fn deploy(values: &ArgMatches) -> Result<()> {
     Ok(())
 }
 
-fn janky_deploy(values: &ArgMatches) -> Result<()> {
-    println!("inside of deploy");
-    let dotfiles_dir = Config::get_dots_dir().unwrap();
-
-    let dotfiles = if values.is_present("all") {
-        DirScanner::default()
-            .recursive()
-            .get_entries(&dotfiles_dir)?
-    } else {
-        let paths: Vec<PathBuf> = values
-            .values_of("dotfiles")
-            .unwrap()
-            .map(PathBuf::from)
-            .collect();
-
-        validate_paths(paths)
-    };
-
-    for dotfile in dotfiles.into_iter() {
-        println!("{:?}", dotfile);
-
-        let dst_path = PathBuf::from("/").join(
-            dotfile
-                .strip_prefix(&dotfiles_dir)
-                .expect("could not strip dotfile path"),
-        );
-        println!("dst path: {:?}", dst_path);
-
-        commands::deploy_dotfile(&dotfile, &dst_path)?;
-    }
-
-    Ok(())
-}
-
-fn restore(matches: &ArgMatches) -> Result<()> {
+fn restore(config: &mut Config, matches: &ArgMatches) -> Result<()> {
     let dotfiles: Vec<PathBuf> = matches
         .values_of("dotfiles")
         .unwrap()
@@ -214,7 +182,9 @@ fn restore(matches: &ArgMatches) -> Result<()> {
         .collect();
 
     for dotfile in dotfiles.into_iter() {
-        commands::restore_dotfile(dotfile)?;
+        let dotfile = paths::get_absolute(dotfile)?;
+        config.restore_dotfile(dotfile)?;
     }
+
     Ok(())
 }

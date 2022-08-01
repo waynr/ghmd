@@ -6,13 +6,13 @@ use std::path::{Path, PathBuf};
 
 use crate::errors::Error;
 use crate::errors::Result;
-use crate::paths::{is_symlink, join_full_paths};
+use crate::paths::join_full_paths;
 use crate::Config;
 use crate::FileHandler;
 
 /// Take input from file at path and store in set dotfiles directory.
-pub fn store_dotfile(path: &Path) -> Result<PathBuf> {
-    let dots_dir = Config::get_dots_dir()?;
+pub fn store_dotfile(config: &Config, path: &Path) -> Result<PathBuf> {
+    let dots_dir = config.get_dots_dir();
 
     // create destination path
     let dst_path = join_full_paths(&dots_dir, &path)?;
@@ -33,42 +33,6 @@ pub fn store_dotfile(path: &Path) -> Result<PathBuf> {
 
     // move dotfile to dotfiles directory
     FileHandler::move_file(&path, &dst_path)?;
-
-    Ok(dst_path)
-}
-
-/// Dotfile is removed from set dotfiles directory and moved to its symlink location.
-/// The input can either be a dotfile's symlink path or the path of the dotfile itself.
-///
-/// Returns destination path.
-pub fn restore_dotfile(path: PathBuf) -> Result<PathBuf> {
-    // get src and dst paths
-    let (src_path, dst_path): (PathBuf, PathBuf) = if is_symlink(&path) {
-        (fs::read_link(&path)?, path)
-    } else {
-        let restore_path = path.strip_prefix(Config::get_dots_dir().unwrap()).unwrap();
-        let dst_path = PathBuf::from("/").join(restore_path);
-
-        (path, dst_path)
-    };
-
-    let is_dotfile = |path: &Path| -> bool {
-        crate::Config::get_dots_dir()
-            .map(|dir| path.starts_with(dir))
-            .unwrap()
-    };
-
-    // check to see if src path exists in dotfiles directory, if not: it is invalid input
-    if !is_dotfile(&src_path) {
-        // throw error
-        return Err(Error::BadInput("input path not located in dotfiles dir!"));
-    };
-
-    if dst_path.exists() {
-        fs::remove_file(&dst_path)?;
-    };
-
-    FileHandler::move_file(&src_path, &dst_path)?;
 
     Ok(dst_path)
 }

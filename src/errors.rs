@@ -25,6 +25,12 @@ pub enum Error {
     #[error("config not found")]
     ConfigNotFound,
 
+    #[error("unable to determine home directory")]
+    MissingHomeDirectory,
+
+    #[error("could not find specified dotfile: {0}")]
+    DotfileNotFound(path::PathBuf),
+
     #[error("invalid dotfile destination directory: {0}")]
     InvalidDotfileDestinationDirectory(path::PathBuf),
 }

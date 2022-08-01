@@ -1,13 +1,18 @@
+use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use crate::errors::Error;
-use crate::errors::Result;
 use dirs::{config_dir, home_dir};
 use serde_derive::{Deserialize, Serialize};
+
+use crate::errors::Error;
+use crate::errors::Result;
+use crate::paths::is_symlink;
+use crate::FileHandler;
 
 /// Handles and saves configuration variables between application calls.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
@@ -27,29 +32,78 @@ pub struct Dotfiles {
 
     /// Path of actual dotfiles. A dotfile is a regular file or directory stored outside of $HOME that
     /// user wants symlinked to $HOME.
-    pub paths: Vec<PathBuf>,
+    pub paths: HashMap<PathBuf, bool>,
+}
+
+impl Dotfiles {
+    pub(crate) fn is_dotfile(&self, path: &PathBuf) -> bool {
+        self.paths.contains_key(path)
+    }
+
+    pub(crate) fn restore_dotfile(&mut self, path: &PathBuf) -> Result<Option<()>> {
+        // get dotfile and symlink paths. need to check in each branch if the given path belongs to
+        // this set of Dotfiles so we can gracefully return Ok(None) if not
+        let (dotfile_path, symlink_path): (PathBuf, PathBuf) = if is_symlink(path) {
+            let dotfile_path = fs::read_link(path)?;
+            let symlink_path = path.to_path_buf();
+            if !self.is_dotfile(&dotfile_path) {
+                return Ok(None);
+            }
+
+            (dotfile_path, symlink_path)
+        } else {
+            if !self.is_dotfile(path) {
+                return Ok(None);
+            }
+            // strip dotfile directory
+            let symlink_path = path.strip_prefix(&self.directory)?;
+            // replace with home directory
+            let symlink_path =
+                PathBuf::from(home_dir().ok_or(Error::MissingHomeDirectory)?)
+                    .join(symlink_path);
+
+            (path.to_path_buf(), symlink_path)
+        };
+
+        if symlink_path.exists() {
+            fs::remove_file(&symlink_path)?;
+        };
+
+        FileHandler::move_file(&dotfile_path, &symlink_path)?;
+
+        Ok(Some(()))
+    }
 }
 
 impl Config {
-    pub(crate) fn new<P: AsRef<Path>>(directory: P, dotfiles: Vec<P>) -> Result<Self> {
-        let directory = directory.as_ref().to_path_buf();
+    /// Load a config from disk and return it to caller.
+    pub fn load() -> Result<Self> {
+        if let Some(config_path) = Self::get_config_file() {
+            let toml = crate::paths::read_path(&config_path)?;
 
-        if directory.is_dir() {
-            Ok(Self {
-                dotfiles: Vec::from(vec![Dotfiles {
-                    directory,
-                    paths: dotfiles.iter().map(|p| p.as_ref().to_path_buf()).collect(),
-                }]),
-            })
+            let config: Self = toml::from_str(&toml).expect("Not able to read config!");
+            Ok(config)
         } else {
-            Err(Error::BadInput("Input to set dots directory is invalid"))
+            Ok(Self {
+                dotfiles: Vec::new(),
+            })
         }
+    }
+
+    /// Restores the named dotfile if id can be found in one of the configured dotfile directories.
+    pub fn restore_dotfile(&mut self, path: PathBuf) -> Result<()> {
+        for dotfiles in self.dotfiles.iter_mut() {
+            if let Some(_) = dotfiles.restore_dotfile(&path)? {
+                return Ok(());
+            }
+        }
+        Ok(())
     }
 
     /// Adds new top-level dotfiles directory, and writes TOML config file.
     ///
     /// Only accepts existing dotfiles directory.
-    pub fn add_dir<P: AsRef<Path>>(path: P) -> Result<()> {
+    pub fn add_dir<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
         let path = path.as_ref();
 
         if !path.exists() {
@@ -58,24 +112,20 @@ impl Config {
             return Err(Error::BadInput("path must be a directory"));
         };
 
-        let config = Self::new(&path, Vec::new())?;
+        self.dotfiles.push(Dotfiles {
+            directory: path.to_path_buf(),
+            paths: HashMap::new(),
+        });
 
-        config.write_toml_config()?;
+        self.write_toml_config()?;
         Ok(())
     }
 
     /// If config file `.badm.toml` exists, get dotfiles directory path.
-    pub fn get_dots_dir() -> Result<PathBuf> {
-        if let Some(config_path) = Self::get_config_file() {
-            let toml = crate::paths::read_path(&config_path)?;
-
-            let config: Self = toml::from_str(&toml).expect("Not able to read config!");
-            // for now, assume there is only one dotfiles directory, later we can add more if
-            // necessary.
-            Ok(config.dotfiles[0].directory.clone())
-        } else {
-            Err(Error::ConfigNotFound)
-        }
+    ///
+    /// deprecated -- only returns the first directory path
+    pub fn get_dots_dir(&self) -> PathBuf {
+        self.dotfiles[0].directory.clone()
     }
 
     /// Search `$HOME` and `$XDG_CONFIG_HOME` for config file path.
@@ -102,7 +152,7 @@ impl Config {
     /// it will be written to $HOME.
     ///
     /// Valid locations for file location include: `$HOME` and `$XDG_CONFIG_HOME`.
-    pub fn write_toml_config(self) -> Result<()> {
+    pub fn write_toml_config(&self) -> Result<()> {
         // check to see if config file already exists, if not default to HOME
         let config_file_path = match Self::get_config_file() {
             Some(path) => path,

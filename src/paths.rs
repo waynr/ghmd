@@ -1,4 +1,5 @@
 //! Includes paths/fs-specific helper functions.
+use std::env;
 use std::fs::{self, File};
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
@@ -10,6 +11,17 @@ pub fn is_symlink(path: &Path) -> bool {
     fs::symlink_metadata(path)
         .map(|md| md.file_type().is_symlink())
         .unwrap_or(false)
+}
+
+/// Verifies path exists and returns absolute path.
+pub fn get_absolute(path: PathBuf) -> Result<PathBuf> {
+    let mut absolute = env::current_dir()?;
+    absolute.push(path);
+
+    // symlink_metadata should return an error if the path doesn't exist
+    let _ = absolute.symlink_metadata()?;
+
+    Ok(absolute)
 }
 
 pub(crate) fn read_path(path: &Path) -> Result<String> {
