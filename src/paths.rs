@@ -1,8 +1,9 @@
 //! Includes paths/fs-specific helper functions.
 use std::fs::{self, File};
-use std::io;
 use std::io::prelude::*;
-use std::path::{Path, PathBuf, StripPrefixError};
+use std::path::{Path, PathBuf};
+
+use crate::errors::Result;
 
 /// Wrapper for `is_symlink` for paths
 pub fn is_symlink(path: &Path) -> bool {
@@ -11,12 +12,12 @@ pub fn is_symlink(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-pub(crate) fn read_path(path: &Path) -> io::Result<String> {
+pub(crate) fn read_path(path: &Path) -> Result<String> {
     let mut file = File::open(path)?;
     read_file(&mut file)
 }
 
-pub(crate) fn read_file(file: &mut File) -> io::Result<String> {
+pub(crate) fn read_file(file: &mut File) -> Result<String> {
     let mut contents = String::new();
     let _ = file.read_to_string(&mut contents)?;
 
@@ -46,10 +47,7 @@ pub(crate) fn read_file(file: &mut File) -> io::Result<String> {
 /// );
 /// ```
 #[allow(clippy::module_name_repetitions)]
-pub fn join_full_paths(
-    path_1: &Path,
-    path_2: &Path,
-) -> Result<PathBuf, StripPrefixError> {
+pub fn join_full_paths(path_1: &Path, path_2: &Path) -> Result<PathBuf> {
     if path_2.has_root() && cfg!(target_family = "unix") {
         let path_2 = path_2.strip_prefix("/")?;
         return Ok(path_1.join(path_2));
@@ -62,7 +60,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn is_symlink_test() -> io::Result<()> {
+    fn is_symlink_test() -> Result<()> {
         // mock files
         let builder = tempfile::Builder::new();
 

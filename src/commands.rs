@@ -1,50 +1,47 @@
 //! Includes the commands used by the badm crate/application.
 
 use std::fs;
-use std::io::{self, Error, ErrorKind};
+use std::io::{self};
 use std::path::{Path, PathBuf};
 
+use crate::errors::Error;
+use crate::errors::Result;
 use crate::paths::{is_symlink, join_full_paths};
 use crate::Config;
 use crate::FileHandler;
 
 /// Take input from file at path and store in set dotfiles directory.
-pub fn store_dotfile(path: &Path) -> io::Result<PathBuf> {
-    if let Some(dots_dir) = Config::get_dots_dir() {
-        // create destination path
-        let dst_path = join_full_paths(&dots_dir, &path).unwrap();
+pub fn store_dotfile(path: &Path) -> Result<PathBuf> {
+    let dots_dir = Config::get_dots_dir()?;
 
-        // if symlink already exists and points to src file, early return
-        if dst_path.exists() && fs::read_link(&dst_path)? == path {
-            return Ok(dst_path);
-        };
+    // create destination path
+    let dst_path = join_full_paths(&dots_dir, &path)?;
 
-        // create directory if not available
-        let dst_dir = dst_path.parent().unwrap();
+    // if symlink already exists and points to src file, early return
+    if dst_path.exists() && fs::read_link(&dst_path)? == path {
+        return Ok(dst_path);
+    };
 
-        if !dst_dir.exists() {
-            fs::create_dir_all(dst_dir)?;
-        };
+    // create directory if not available
+    let dst_dir = dst_path
+        .parent()
+        .ok_or(Error::InvalidDotfileDestinationDirectory(dst_path.clone()))?;
 
-        // move dotfile to dotfiles directory
-        FileHandler::move_file(&path, &dst_path)?;
+    if !dst_dir.exists() {
+        fs::create_dir_all(dst_dir)?;
+    };
 
-        Ok(dst_path)
-    } else {
-        let err = io::Error::new(
-            io::ErrorKind::NotFound,
-            "Not able to complete operation because BADM_DIR was not set. Please run \
-             `badm set-dir=<DIR> first.`",
-        );
-        Err(err)
-    }
+    // move dotfile to dotfiles directory
+    FileHandler::move_file(&path, &dst_path)?;
+
+    Ok(dst_path)
 }
 
 /// Dotfile is removed from set dotfiles directory and moved to its symlink location.
 /// The input can either be a dotfile's symlink path or the path of the dotfile itself.
 ///
 /// Returns destination path.
-pub fn restore_dotfile(path: PathBuf) -> io::Result<PathBuf> {
+pub fn restore_dotfile(path: PathBuf) -> Result<PathBuf> {
     // get src and dst paths
     let (src_path, dst_path): (PathBuf, PathBuf) = if is_symlink(&path) {
         (fs::read_link(&path)?, path)
@@ -64,11 +61,7 @@ pub fn restore_dotfile(path: PathBuf) -> io::Result<PathBuf> {
     // check to see if src path exists in dotfiles directory, if not: it is invalid input
     if !is_dotfile(&src_path) {
         // throw error
-        let err = Error::new(
-            ErrorKind::InvalidInput,
-            "input path not located in dotfiles dir!",
-        );
-        return Err(err);
+        return Err(Error::BadInput("input path not located in dotfiles dir!"));
     };
 
     if dst_path.exists() {

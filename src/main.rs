@@ -1,13 +1,12 @@
 use glob::glob;
 use std::fs;
-use std::io;
 use std::path::{Path, PathBuf};
 
 #[macro_use]
 extern crate clap;
 
+use anyhow::Result;
 use clap::{App, AppSettings, Arg, ArgMatches};
-use failure::Error;
 
 use badm::commands;
 use badm::paths;
@@ -28,7 +27,7 @@ fn validate_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
         .collect::<Vec<PathBuf>>()
 }
 
-fn main() -> Result<(), Error> {
+fn main() -> Result<()> {
     let set_dir_subcommand = App::new("set-dir")
         .about("set path of dotfiles directory")
         .version("1.0")
@@ -113,7 +112,7 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
-fn add_dir<P: AsRef<Path>>(path: P) -> Result<(), Error> {
+fn add_dir<P: AsRef<Path>>(path: P) -> Result<()> {
     let path = path.as_ref().to_path_buf();
 
     Config::add_dir(path)?;
@@ -122,7 +121,7 @@ fn add_dir<P: AsRef<Path>>(path: P) -> Result<(), Error> {
     Ok(())
 }
 
-fn stow(values: &ArgMatches) -> io::Result<()> {
+fn stow(values: &ArgMatches) -> Result<()> {
     let mut input_paths = vec![];
 
     for path in values.values_of("files").unwrap() {
@@ -139,7 +138,41 @@ fn stow(values: &ArgMatches) -> io::Result<()> {
     Ok(())
 }
 
-fn deploy(values: &ArgMatches) -> io::Result<()> {
+fn deploy(values: &ArgMatches) -> Result<()> {
+    println!("inside of deploy");
+    let dotfiles_dir = Config::get_dots_dir()?;
+
+    let dotfiles = if values.is_present("all") {
+        DirScanner::default()
+            .recursive()
+            .get_entries(&dotfiles_dir)?
+    } else {
+        let paths: Vec<PathBuf> = values
+            .values_of("dotfiles")
+            .unwrap()
+            .map(PathBuf::from)
+            .collect();
+
+        validate_paths(paths)
+    };
+
+    for dotfile in dotfiles.into_iter() {
+        println!("{:?}", dotfile);
+
+        let dst_path = PathBuf::from("/").join(
+            dotfile
+                .strip_prefix(&dotfiles_dir)
+                .expect("could not strip dotfile path"),
+        );
+        println!("dst path: {:?}", dst_path);
+
+        commands::deploy_dotfile(&dotfile, &dst_path)?;
+    }
+
+    Ok(())
+}
+
+fn janky_deploy(values: &ArgMatches) -> Result<()> {
     println!("inside of deploy");
     let dotfiles_dir = Config::get_dots_dir().unwrap();
 
@@ -173,7 +206,7 @@ fn deploy(values: &ArgMatches) -> io::Result<()> {
     Ok(())
 }
 
-fn restore(matches: &ArgMatches) -> io::Result<()> {
+fn restore(matches: &ArgMatches) -> Result<()> {
     let dotfiles: Vec<PathBuf> = matches
         .values_of("dotfiles")
         .unwrap()

@@ -78,9 +78,7 @@ mod errors;
 pub mod paths;
 
 pub use crate::config::Config;
-pub use crate::errors::InputError;
-
-#[macro_use] extern crate failure;
+pub use crate::errors::Result;
 
 use std::fs::{self, File};
 use std::io::{self, prelude::*, BufWriter};
@@ -101,10 +99,10 @@ impl DirScanner {
     /// will only traverse one level below.
     ///
     /// [`DirScanner::recursive`]: struct.DirScanner.html/#method.recursive
-    pub fn get_entries(mut self, dir: &Path) -> io::Result<Vec<PathBuf>> {
+    pub fn get_entries(mut self, dir: &Path) -> Result<Vec<PathBuf>> {
         self.collect_entries(dir)?;
 
-        self.entries = self
+        let entries: std::result::Result<Vec<PathBuf>, _> = self
             .entries
             .into_iter()
             .map(|path| {
@@ -114,10 +112,9 @@ impl DirScanner {
                     Ok(path)
                 }
             })
-            .filter_map(Result::ok)
             .collect();
 
-        Ok(self.entries)
+        Ok(entries?)
     }
 
     /// Builder method to set recursive flag to `true` when scanning directory.
@@ -126,7 +123,7 @@ impl DirScanner {
         self
     }
 
-    fn collect_entries(&mut self, dir: &Path) -> io::Result<()> {
+    fn collect_entries(&mut self, dir: &Path) -> Result<()> {
         if dir.is_dir() {
             for entry in fs::read_dir(dir)? {
                 let path = entry.map(|e| e.path())?;
@@ -160,13 +157,14 @@ pub struct FileHandler;
 impl FileHandler {
     /// Store a file in the dotfiles directory, create a symlink at the original
     /// source of the stowed file.
-    pub fn store_file(src: &Path, dst: &Path) -> io::Result<()> {
+    pub fn store_file(src: &Path, dst: &Path) -> Result<()> {
         Self::move_file(src, dst)?;
-        Self::create_symlink(dst, src)
+        Self::create_symlink(dst, src)?;
+        Ok(())
     }
 
     /// Read file at path src and write to created/truncated file at path dst.
-    pub fn move_file(src: &Path, dst: &Path) -> io::Result<()> {
+    pub fn move_file(src: &Path, dst: &Path) -> Result<()> {
         // read file path to String
         let contents = crate::paths::read_path(src)?;
 
@@ -176,7 +174,8 @@ impl FileHandler {
         writer.write_all(contents.as_bytes())?;
 
         // remove file at src location
-        fs::remove_file(&src)
+        fs::remove_file(&src)?;
+        Ok(())
     }
 
     /// Create a symlink at "dst" pointing to "src."
@@ -187,7 +186,8 @@ impl FileHandler {
     /// [`std::os::unix::fs::symlink`]: std/os/unix/fs/fn.symlink.html
     /// [`std::os::windows::fs::symlink_file`]: std/os/windows/fs/fn.symlink_file.html
     pub fn create_symlink(src: &Path, dst: &Path) -> io::Result<()> {
-        #[cfg(not(target_os = "windows"))] use std::os::unix::fs::symlink;
+        #[cfg(not(target_os = "windows"))]
+        use std::os::unix::fs::symlink;
 
         #[cfg(target_os = "windows")]
         use std::os::windows::fs::symlink_file as symlink;

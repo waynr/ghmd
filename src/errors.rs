@@ -1,22 +1,30 @@
 use std::io;
+use std::path;
 
-#[allow(missing_docs)]
-#[derive(Debug, Fail)]
-pub enum InputError {
-    #[fail(display = "Could not parse toml: {:?}", err)]
-    InvalidToml { err: toml::de::Error },
-    #[fail(display = "Could not parse input: {:?}: ", err)]
-    BadInput { err: io::Error },
-}
+use thiserror::Error;
+use toml;
 
-impl From<io::Error> for InputError {
-    fn from(err: io::Error) -> Self {
-        Self::BadInput { err }
-    }
-}
+/// The Result type for badm.
+pub type Result<T> = std::result::Result<T, Error>;
 
-impl From<toml::de::Error> for InputError {
-    fn from(err: toml::de::Error) -> Self {
-        Self::InvalidToml { err }
-    }
+/// The Error type for badm.
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("could not parse toml")]
+    InvalidToml(#[from] toml::de::Error),
+
+    #[error("meow")]
+    StdIOError(#[from] io::Error),
+
+    #[error("could not strip prefix")]
+    StripPrefixError(#[from] path::StripPrefixError),
+
+    #[error("bad input detected: {0}")]
+    BadInput(&'static str),
+
+    #[error("config not found")]
+    ConfigNotFound,
+
+    #[error("invalid dotfile destination directory: {0}")]
+    InvalidDotfileDestinationDirectory(path::PathBuf),
 }
