@@ -3,7 +3,8 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-#[macro_use] extern crate clap;
+#[macro_use]
+extern crate clap;
 
 use clap::{App, AppSettings, Arg, ArgMatches};
 use failure::Error;
@@ -102,7 +103,7 @@ fn main() -> Result<(), Error> {
     match matches.subcommand() {
         ("set-dir", Some(set_dir_matches)) => {
             let dir_path = set_dir_matches.value_of("directory").unwrap();
-            set_dir(dir_path)?
+            add_dir(dir_path)?
         },
         ("stow", Some(stow_matches)) => stow(stow_matches)?,
         ("deploy", Some(deploy_matches)) => deploy(deploy_matches)?,
@@ -112,12 +113,12 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
-fn set_dir<P: AsRef<Path>>(path: P) -> Result<(), Error> {
+fn add_dir<P: AsRef<Path>>(path: P) -> Result<(), Error> {
     let path = path.as_ref().to_path_buf();
 
-    let set_path = Config::set_dots_dir(path)?;
+    Config::add_dir(path)?;
 
-    println! {"BADM dotfiles path has been set to: {:?}", set_path};
+    println! {"dotfiles path successfully added"};
     Ok(())
 }
 
