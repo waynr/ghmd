@@ -1,5 +1,4 @@
 use glob::glob;
-use std::fs;
 use std::path::{Path, PathBuf};
 
 #[macro_use]
@@ -8,24 +7,8 @@ extern crate clap;
 use anyhow::Result;
 use clap::{App, AppSettings, Arg, ArgMatches};
 
-use badm::commands;
 use badm::paths;
-use badm::{Config, DirScanner};
-
-fn validate_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
-    paths
-        .into_iter()
-        .filter(|path| path.is_file() && !paths::is_symlink(path))
-        .map(|path| {
-            if path.is_relative() {
-                fs::canonicalize(path)
-            } else {
-                Ok(path)
-            }
-        })
-        .filter_map(Result::ok)
-        .collect::<Vec<PathBuf>>()
-}
+use badm::Config;
 
 fn main() -> Result<()> {
     let set_dir_subcommand = App::new("set-dir")
@@ -124,53 +107,33 @@ fn add_dir<P: AsRef<Path>>(config: &mut Config, path: P) -> Result<()> {
 }
 
 fn stow(config: Config, values: &ArgMatches) -> Result<()> {
-    let mut input_paths = vec![];
+    let mut paths = vec![];
 
     for path in values.values_of("files").unwrap() {
-        let paths: Vec<PathBuf> = glob(path).unwrap().filter_map(Result::ok).collect();
-        let mut path_vec = validate_paths(paths);
+        let mut glob_paths: Vec<PathBuf> = glob(path)?.filter_map(Result::ok).collect();
 
-        input_paths.append(&mut path_vec);
+        paths.append(&mut glob_paths);
     }
 
-    for path in input_paths.into_iter() {
-        let dst_path = commands::store_dotfile(&config, &path)?;
-        commands::deploy_dotfile(&dst_path, &path)?;
-    }
+    config.deploy_paths(paths)?;
     Ok(())
 }
 
 fn deploy(config: Config, values: &ArgMatches) -> Result<()> {
     println!("deploying dotfiles");
-    let dotfiles_dir = config.get_dots_dir();
 
-    let dotfiles = if values.is_present("all") {
-        DirScanner::default()
-            .recursive()
-            .get_entries(&dotfiles_dir)?
-    } else {
-        let paths: Vec<PathBuf> = values
-            .values_of("dotfiles")
-            .unwrap()
-            .map(PathBuf::from)
-            .collect();
-
-        validate_paths(paths)
+    if values.is_present("all") {
+        config.deploy_all()?;
+        return Ok(());
     };
 
-    for dotfile in dotfiles.into_iter() {
-        println!("{:?}", dotfile);
+    let paths: Vec<PathBuf> = values
+        .values_of("dotfiles")
+        .unwrap()
+        .map(PathBuf::from)
+        .collect();
 
-        let dst_path = PathBuf::from("/").join(
-            dotfile
-                .strip_prefix(&dotfiles_dir)
-                .expect("could not strip dotfile path"),
-        );
-        println!("dst path: {:?}", dst_path);
-
-        commands::deploy_dotfile(&dotfile, &dst_path)?;
-    }
-
+    config.deploy_paths(paths)?;
     Ok(())
 }
 
