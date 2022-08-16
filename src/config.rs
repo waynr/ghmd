@@ -1,10 +1,8 @@
 use std::collections::BTreeSet;
-use std::convert::TryFrom;
 use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 
 use dirs::{config_dir, home_dir};
 use serde_derive::{Deserialize, Serialize};
@@ -281,33 +279,5 @@ impl Config {
         file.sync_data()?;
 
         Ok(())
-    }
-}
-
-impl TryFrom<File> for Config {
-    type Error = Error;
-    fn try_from(file: File) -> std::result::Result<Self, Self::Error> {
-        let mut file = file;
-
-        let contents = crate::paths::read_file(&mut file)?;
-
-        Ok(toml::from_str(&contents)?)
-    }
-}
-
-impl TryFrom<PathBuf> for Config {
-    type Error = Error;
-    fn try_from(path: PathBuf) -> std::result::Result<Self, Self::Error> {
-        let file = File::open(path)?;
-        Self::try_from(file)
-    }
-}
-
-impl FromStr for Config {
-    type Err = toml::de::Error;
-
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        let config: Self = toml::from_str(s)?;
-        Ok(config)
     }
 }
