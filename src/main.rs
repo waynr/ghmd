@@ -4,15 +4,15 @@ use std::path::{Path, PathBuf};
 #[macro_use]
 extern crate clap;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use clap::{App, AppSettings, Arg, ArgMatches};
 
 use badm::paths;
 use badm::Config;
 
 fn main() -> Result<()> {
-    let set_dir_subcommand = App::new("set-dir")
-        .about("set path of dotfiles directory")
+    let set_dir_subcommand = App::new("add-dotfiles-dir")
+        .about("add new dotfiles directory")
         .version("1.0")
         .display_order(1)
         .arg(
@@ -85,14 +85,14 @@ fn main() -> Result<()> {
     let mut config = Config::load()?;
 
     match matches.subcommand() {
-        ("add-dir", Some(set_dir_matches)) => {
+        ("add-dotfiles-dir", Some(set_dir_matches)) => {
             let dir_path = set_dir_matches.value_of("directory").unwrap();
             add_dir(&mut config, dir_path)?
         },
         ("stow", Some(stow_matches)) => stow(config, stow_matches)?,
         ("deploy", Some(deploy_matches)) => deploy(config, deploy_matches)?,
         ("restore", Some(restore_matches)) => restore(&mut config, restore_matches)?,
-        _ => {},
+        (s, _) => return Err(anyhow!("invalid subcommand: {0}", s)),
     }
     Ok(())
 }

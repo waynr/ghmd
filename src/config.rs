@@ -9,8 +9,8 @@ use serde_derive::{Deserialize, Serialize};
 
 use crate::errors::Error;
 use crate::errors::Result;
-use crate::paths::is_symlink;
 use crate::paths;
+use crate::paths::is_symlink;
 
 /// Handles and saves configuration variables between application calls.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
@@ -155,8 +155,7 @@ impl Config {
         if let Some(config_path) = Self::get_config_file() {
             let toml = crate::paths::read_path(&config_path)?;
 
-            let mut config: Self =
-                toml::from_str(&toml).expect("Not able to read config!");
+            let mut config: Self = toml::from_str(&toml)?;
             for dotfiles in config.dotfiles.iter_mut() {
                 if dotfiles.symlink_directory.as_os_str().len() == 0 {
                     dotfiles.symlink_directory =
@@ -243,22 +242,19 @@ impl Config {
 
     /// Search `$HOME` and `$XDG_CONFIG_HOME` for config file path.
     fn get_config_file() -> Option<PathBuf> {
-        let search_paths = |file_name: &str, dirs_vec: Vec<PathBuf>| -> Option<PathBuf> {
-            for dir in dirs_vec {
-                let possible_file_path = dir.join(file_name);
+        let config_path = Self::config_file_path().ok()?;
 
-                if possible_file_path.exists() {
-                    return Some(possible_file_path);
-                };
-            }
-            None
+        if config_path.exists() {
+            return Some(config_path);
         };
+        None
+    }
 
-        let config_file_name = ".badm.toml";
-        search_paths(
-            config_file_name,
-            vec![config_dir().unwrap(), home_dir().unwrap()],
-        )
+    fn config_file_path() -> Result<PathBuf> {
+        Ok(config_dir()
+            .ok_or(Error::CannotDetermineConfigDir)?
+            .join("badm")
+            .join("config.toml"))
     }
 
     /// Save configuration variables to config file `.badm.toml`. If file cannot be found
@@ -266,12 +262,12 @@ impl Config {
     ///
     /// Valid locations for file location include: `$HOME` and `$XDG_CONFIG_HOME`.
     pub fn write_toml_config(&self) -> Result<()> {
-        // check to see if config file already exists, if not default to HOME
-        let config_file_path = match Self::get_config_file() {
-            Some(path) => path,
-            None => config_dir().unwrap().join(".badm.toml"),
-        };
-
+        let config_file_path = Self::config_file_path()?;
+        fs::create_dir_all(
+            config_file_path
+                .parent()
+                .ok_or(Error::CannotDetermineConfigDir)?,
+        )?;
         let toml = toml::to_string(&self).unwrap();
         let mut file = File::create(config_file_path)?;
 
