@@ -1,33 +1,26 @@
 use glob::glob;
-use std::path::{Path, PathBuf};
-
-#[macro_use]
-extern crate clap;
+use std::path::PathBuf;
 
 use anyhow::{anyhow, Result};
+use clap::{crate_authors, crate_description, crate_name};
 use clap::{App, AppSettings, Arg, ArgMatches};
 
 use ghmd::paths;
 use ghmd::Config;
 
 fn main() -> Result<()> {
-    let set_dir_subcommand = App::new("add-dotfiles-dir")
-        .about("add new dotfiles directory")
-        .version("1.0")
-        .display_order(1)
-        .arg(
-            Arg::with_name("directory")
-                .help("directory to store dotfiles")
-                .required(true),
-        );
-
     let stow_subcommand = App::new("stow")
         .about(
-            "store input files in the dotfiles directory, and replace the file's \
-             original path with a symlink",
+            "store input files in the specified dotfiles directory, and replace the file's \
+            original path with a symlink",
         )
-        .version("0.1")
         .display_order(2)
+        .arg(
+            Arg::with_name("dotfile_dir")
+                .help("path of the dotfiles directory")
+                .required(true)
+                .multiple(false),
+        )
         .arg(
             Arg::with_name("files")
                 .help("path of the file/files to be stored in the dotfiles directory")
@@ -41,7 +34,6 @@ fn main() -> Result<()> {
              dotfile's directory hierarchy. Directories to replicate the stored \
              dotfile's directory structure will be created if not found.",
         )
-        .version("0.1")
         .display_order(3)
         .arg(
             Arg::with_name("dotfiles")
@@ -58,8 +50,7 @@ fn main() -> Result<()> {
         );
 
     let restore_subcommand = App::new("restore")
-        .about("restore all dotfiles to their original locations")
-        .version("0.1")
+        .about("restore specified dotfiles to their original locations")
         .display_order(4)
         .arg(
             Arg::with_name("dotfiles")
@@ -68,54 +59,41 @@ fn main() -> Result<()> {
                 .required(true),
         );
 
-    let matches = App::new("badm")
+    let matches = App::new(crate_name!())
         .setting(AppSettings::ArgRequiredElseHelp)
         .about(crate_description!())
-        .version(crate_version!())
         .author(crate_authors!())
         .after_help("https://github.com/jakeschurch/badm")
-        .subcommands(vec![
-            set_dir_subcommand,
-            stow_subcommand,
-            deploy_subcommand,
-            restore_subcommand,
-        ])
+        .subcommands(vec![stow_subcommand, deploy_subcommand, restore_subcommand])
         .get_matches();
 
     let mut config = Config::load()?;
 
     match matches.subcommand() {
-        ("add-dotfiles-dir", Some(set_dir_matches)) => {
-            let dir_path = set_dir_matches.value_of("directory").unwrap();
-            add_dir(&mut config, dir_path)?
-        },
-        ("stow", Some(stow_matches)) => stow(config, stow_matches)?,
-        ("deploy", Some(deploy_matches)) => deploy(config, deploy_matches)?,
-        ("restore", Some(restore_matches)) => restore(&mut config, restore_matches)?,
-        (s, _) => return Err(anyhow!("invalid subcommand: {0}", s)),
+        Some(("stow", stow_matches)) => stow(config, stow_matches)?,
+        Some(("deploy", deploy_matches)) => deploy(config, deploy_matches)?,
+        Some(("restore", restore_matches)) => restore(&mut config, restore_matches)?,
+        Some((s, _)) => return Err(anyhow!("invalid subcommand: {0}", s)),
+        None => return Err(anyhow!("missing subcommand")),
     }
     Ok(())
 }
 
-fn add_dir<P: AsRef<Path>>(config: &mut Config, path: P) -> Result<()> {
-    let path = path.as_ref().to_path_buf();
-
-    config.add_dir(path)?;
-
-    println! {"dotfiles path successfully added"};
-    Ok(())
-}
-
-fn stow(config: Config, values: &ArgMatches) -> Result<()> {
+fn stow(config: Config, matches: &ArgMatches) -> Result<()> {
     let mut paths = vec![];
 
-    for path in values.values_of("files").unwrap() {
+    let dotfiles_dir: PathBuf = matches
+        .get_one::<PathBuf>("dotfiles_dir")
+        .ok_or(anyhow!("must include dotfiles_dir argument"))?
+        .into();
+
+    for path in matches.values_of("files").unwrap() {
         let mut glob_paths: Vec<PathBuf> = glob(path)?.filter_map(Result::ok).collect();
 
         paths.append(&mut glob_paths);
     }
 
-    config.deploy_paths(paths)?;
+    config.stow(dotfiles_dir, paths)?;
     Ok(())
 }
 

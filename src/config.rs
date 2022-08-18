@@ -201,6 +201,11 @@ impl Config {
         Ok(())
     }
 
+    /// Stow paths in given dotfile dir.
+    pub fn stow<P: AsRef<Path>>(&self, _dotfile_dir: P, _stow_paths: Vec<P>) -> Result<()> {
+        Ok(())
+    }
+
     /// Restores the named dotfile if id can be found in one of the configured dotfile directories.
     pub fn restore_dotfile(&mut self, path: PathBuf) -> Result<()> {
         for dotfiles in self.dotfiles.iter_mut() {
