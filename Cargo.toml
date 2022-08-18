@@ -15,7 +15,7 @@ is-it-maintained-open-issues = { repository = "waynr/ghmd" }
 maintenance = { status = "actively-developed" }
 
 [[bin]]
-name = "badm"
+name = "ghmd"
 path = "src/main.rs"
 
 [dev-dependencies]

@@ -63,7 +63,7 @@ fn main() -> Result<()> {
         .setting(AppSettings::ArgRequiredElseHelp)
         .about(crate_description!())
         .author(crate_authors!())
-        .after_help("https://github.com/jakeschurch/badm")
+        .after_help("https://github.com/waynr/ghmd")
         .subcommands(vec![stow_subcommand, deploy_subcommand, restore_subcommand])
         .get_matches();
 
