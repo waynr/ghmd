@@ -1,17 +1,17 @@
 [package]
-name = "badm"
+name = "ghmd"
 version = "0.5.0"
-authors = ["Jake Schurch <jakeschurch@gmail.com>"]
-edition = "2018"
-repository = "https://github.com/jakeschurch/badm"
+authors = ["Wayne Warren <wayne.warren.s@gmail.com>", "Jake Schurch <jakeschurch@gmail.com>"]
+edition = "2021"
+repository = "https://github.com/waynr/ghmd"
 readme = "README.md"
 license = "MIT"
 categories = ['command-line-utilities']
-description = "But another dotfile manager."
+description = "gotta have my dots"
 
 [badges]
-is-it-maintained-issue-resolution = { repository = "jakeschurch/badm" }
-is-it-maintained-open-issues = { repository = "jakeschurch/badm" }
+is-it-maintained-issue-resolution = { repository = "waynr/ghmd" }
+is-it-maintained-open-issues = { repository = "waynr/ghmd" }
 maintenance = { status = "actively-developed" }
 
 [[bin]]

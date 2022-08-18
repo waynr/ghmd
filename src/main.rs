@@ -7,8 +7,8 @@ extern crate clap;
 use anyhow::{anyhow, Result};
 use clap::{App, AppSettings, Arg, ArgMatches};
 
-use badm::paths;
-use badm::Config;
+use ghmd::paths;
+use ghmd::Config;
 
 fn main() -> Result<()> {
     let set_dir_subcommand = App::new("add-dotfiles-dir")
