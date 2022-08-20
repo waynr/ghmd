@@ -238,13 +238,6 @@ impl Config {
         Ok(())
     }
 
-    /// If config file `.badm.toml` exists, get dotfiles directory path.
-    ///
-    /// deprecated -- only returns the first directory path
-    pub fn get_dots_dir(&self) -> PathBuf {
-        self.dotfiles[0].dotfile_directory.clone()
-    }
-
     /// Search `$HOME` and `$XDG_CONFIG_HOME` for config file path.
     fn get_config_file() -> Option<PathBuf> {
         let config_path = Self::config_file_path().ok()?;
