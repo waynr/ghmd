@@ -1,31 +1,11 @@
 //! Includes paths/fs-specific helper functions.
-use std::env;
 use std::fs::{self, File};
 use std::io;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
+use std::os::linux::fs::MetadataExt;
 
-use block_utils::get_device_from_path;
-
-use crate::errors::{Error, Result};
-
-/// Wrapper for `is_symlink` for paths
-pub fn is_symlink(path: &Path) -> bool {
-    fs::symlink_metadata(path)
-        .map(|md| md.file_type().is_symlink())
-        .unwrap_or(false)
-}
-
-/// Verifies path exists and returns absolute path.
-pub fn get_absolute(path: PathBuf) -> Result<PathBuf> {
-    let mut absolute = env::current_dir()?;
-    absolute.push(path);
-
-    // symlink_metadata should return an error if the path doesn't exist
-    let _ = absolute.symlink_metadata()?;
-
-    Ok(absolute)
-}
+use crate::errors::Result;
 
 pub(crate) fn read_path(path: &Path) -> Result<String> {
     let mut file = File::open(path)?;
@@ -73,36 +53,24 @@ pub fn join_full_paths(path_1: &Path, path_2: &Path) -> Result<PathBuf> {
 /// Store a file in the dotfiles directory, create a symlink at the original
 /// source of the stowed file.
 pub fn store_file(src: PathBuf, dst: PathBuf) -> Result<()> {
-    move_file(src.clone(), dst.clone())?;
-    create_symlink(dst, src)?;
+    move_file(&src, &dst)?;
+    create_symlink(&dst, &src)?;
     Ok(())
 }
 
 /// Read file at path src and write to created/truncated file at path dst.
-pub fn move_file(src: PathBuf, dst: PathBuf) -> Result<()> {
-    let (sid, ssn) = match get_device_from_path(src.clone())? {
-        (_, None) => return Err(Error::UnableToRetrievePathDeviceInfo(src.clone())),
-        (_, Some(d)) => (d.id, d.serial_number),
-    };
-    let (did, dsn) = match get_device_from_path(dst.clone())? {
-        (_, None) => return Err(Error::UnableToRetrievePathDeviceInfo(dst.clone())),
-        (_, Some(d)) => (d.id, d.serial_number),
-    };
+pub fn move_file(src: &PathBuf, dst: &PathBuf) -> Result<()> {
+        println!("creating symlink2");
+    let src_meta = src.symlink_metadata()?;
+        println!("creating symlink3");
 
-    let same = match (sid, ssn, did, dsn) {
-        (Some(sid), Some(ssn), Some(did), Some(dsn)) => sid == did && ssn == dsn,
-        (Some(sid), _, Some(did), _) => sid == did,
-        (_, Some(ssn), _, Some(dsn)) => ssn == dsn,
-        (_, _, _, _) => false,
-    };
-
-    if same {
+        println!("creating symlink4");
+    if dst.exists() && src_meta.st_dev() == dst.symlink_metadata()?.st_dev() {
         // if src and dst are on the same filesystem, there is no need to copy bytes around at all,
         // just rename the file
         fs::rename(src, dst)?;
     } else {
-        let meta = src.symlink_metadata()?;
-        if meta.is_symlink() || meta.is_file() {
+        if src_meta.is_symlink() || src_meta.is_file() {
             let mut opts = fs_extra::file::CopyOptions::new();
             opts.overwrite = false;
             opts.skip_exist = true;
@@ -126,7 +94,7 @@ pub fn move_file(src: PathBuf, dst: PathBuf) -> Result<()> {
 ///
 /// [`std::os::unix::fs::symlink`]: std/os/unix/fs/fn.symlink.html
 /// [`std::os::windows::fs::symlink_file`]: std/os/windows/fs/fn.symlink_file.html
-pub fn create_symlink(src: PathBuf, dst: PathBuf) -> io::Result<()> {
+pub fn create_symlink(src: &PathBuf, dst: &PathBuf) -> io::Result<()> {
     #[cfg(not(target_os = "windows"))]
     use std::os::unix::fs::symlink;
 

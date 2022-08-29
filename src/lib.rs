@@ -77,4 +77,5 @@ mod errors;
 pub mod paths;
 
 pub use crate::config::Config;
+pub use crate::config::{DotfilesDir, DotfilePath, SymlinkDir};
 pub use crate::errors::Result;

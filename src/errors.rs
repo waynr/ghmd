@@ -3,7 +3,6 @@ use std::path;
 
 use thiserror::Error;
 use toml;
-use block_utils;
 use fs_extra;
 
 /// The Result type for badm.
@@ -17,7 +16,7 @@ pub enum Error {
     InvalidToml(#[from] toml::de::Error),
 
     /// Wrapper around `io::Error`.
-    #[error("meow")]
+    #[error("error: {0}")]
     StdIOError(#[from] io::Error),
 
     /// Wrapper around `std::path::StripPrefixError`.
@@ -27,9 +26,6 @@ pub enum Error {
     /// Indicates bad input detected.
     #[error("bad input detected: {0}")]
     BadInput(&'static str),
-
-    #[error("unable to retrieve path device info")]
-    BlockUtilsError(#[from] block_utils::BlockUtilsError),
 
     #[error("fs_extra error")]
     FSExtraError(#[from] fs_extra::error::Error),
@@ -46,6 +42,9 @@ pub enum Error {
     #[error("missing HOME directory!")]
     MissingHomeDirectory,
 
+    #[error("path doesn't match symlink dir")]
+    DoesntMatchSymlinkDir,
+
     #[error("expected path '{0}' to exist, but it doesn't")]
     PathDoesNotExist(path::PathBuf),
 
@@ -55,12 +54,24 @@ pub enum Error {
     #[error("could not find specified dotfile: {0}")]
     DotfileNotFound(path::PathBuf),
 
-    #[error("invalid dotfile destination directory: {0}")]
-    InvalidDotfileDestinationDirectory(path::PathBuf),
+    #[error("path '{0}' does not start with prefix '{1}'")]
+    PathDoesNotStartWithPrefix(path::PathBuf, path::PathBuf),
+
+    #[error("cannot determine symlink destination directory for {0}")]
+    CannotDetermineSymlinkDestinationDirectory(path::PathBuf),
 
     #[error("invalid symlink destination directory: {0}")]
     InvalidSymlinkDestinationDirectory(path::PathBuf),
 
     #[error("no configured dotfile found that matches {0}")]
     NoMatchingDotfileConfigured(path::PathBuf),
+
+    #[error("unexpected error: {0}")]
+    UnexpectedError(&'static str),
+
+    #[error("dotfile path must be relative: {0}")]
+    DotfilePathMustBeRelative(path::PathBuf),
+
+    #[error("dotfile path already exists: {0}")]
+    DotfilePathAlreadyExists(path::PathBuf),
 }

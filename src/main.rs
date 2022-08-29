@@ -4,11 +4,14 @@ use std::path::PathBuf;
 use anyhow::{anyhow, Result};
 use clap::{crate_authors, crate_description, crate_name};
 use clap::{App, AppSettings, Arg, ArgMatches};
+use pretty_env_logger;
+use log;
 
-use ghmd::paths;
 use ghmd::Config;
+use ghmd::{DotfilePath, DotfilesDir, SymlinkDir};
 
 fn main() -> Result<()> {
+    pretty_env_logger::init();
     let stow_subcommand = App::new("stow")
         .about(
             "store input files in the specified dotfiles directory, and replace the file's \
@@ -16,7 +19,13 @@ fn main() -> Result<()> {
         )
         .display_order(2)
         .arg(
-            Arg::with_name("dotfile_dir")
+            Arg::with_name("symlink_dir")
+                .help("path relative to which symlink directory")
+                .required(true)
+                .multiple(false),
+        )
+        .arg(
+            Arg::with_name("dotfiles_dir")
                 .help("path of the dotfiles directory")
                 .required(true)
                 .multiple(false),
@@ -53,6 +62,12 @@ fn main() -> Result<()> {
         .about("restore specified dotfiles to their original locations")
         .display_order(4)
         .arg(
+            Arg::with_name("dotfiles_dir")
+                .help("path of the dotfiles directory")
+                .required(true)
+                .multiple(false),
+        )
+        .arg(
             Arg::with_name("dotfiles")
                 .help("the dotfiles to restore to original locations")
                 .multiple(true)
@@ -70,8 +85,8 @@ fn main() -> Result<()> {
     let mut config = Config::load()?;
 
     match matches.subcommand() {
-        Some(("stow", stow_matches)) => stow(config, stow_matches)?,
-        Some(("deploy", deploy_matches)) => deploy(config, deploy_matches)?,
+        Some(("stow", stow_matches)) => stow(&mut config, stow_matches)?,
+        Some(("deploy", deploy_matches)) => deploy(&config, deploy_matches)?,
         Some(("restore", restore_matches)) => restore(&mut config, restore_matches)?,
         Some((s, _)) => return Err(anyhow!("invalid subcommand: {0}", s)),
         None => return Err(anyhow!("missing subcommand")),
@@ -79,26 +94,38 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn stow(config: Config, matches: &ArgMatches) -> Result<()> {
-    let mut paths = vec![];
-
-    let dotfiles_dir: PathBuf = matches
-        .get_one::<PathBuf>("dotfiles_dir")
+fn stow(config: &mut Config, matches: &ArgMatches) -> Result<()> {
+    let dotfiles_dir: DotfilesDir = matches
+        .get_one::<String>("dotfiles_dir")
+        .and_then(|s| Some(PathBuf::from(s)))
         .ok_or(anyhow!("must include dotfiles_dir argument"))?
-        .into();
+        .try_into()?;
 
-    for path in matches.values_of("files").unwrap() {
-        let mut glob_paths: Vec<PathBuf> = glob(path)?.filter_map(Result::ok).collect();
+    let symlink_dir: SymlinkDir = matches
+        .get_one::<String>("symlink_dir")
+        .and_then(|s| Some(PathBuf::from(s)))
+        .ok_or(anyhow!("must include symlink_dir argument"))?
+        .try_into()?;
 
-        paths.append(&mut glob_paths);
+    log::debug!("dotfiles_dir: {:?}", dotfiles_dir);
+    log::debug!("symlink_dir: {:?}", symlink_dir);
+
+    let mut dotfile_paths: Vec<DotfilePath> = Vec::new();
+    for glob_path in matches.values_of("files").unwrap() {
+        for path in &glob(glob_path)?
+            .filter_map(Result::ok)
+            .collect::<Vec<PathBuf>>()
+        {
+            dotfile_paths.push((&symlink_dir, &dotfiles_dir, path).try_into()?);
+        }
     }
 
-    config.stow(dotfiles_dir, paths)?;
+    config.stow_paths(symlink_dir, dotfiles_dir, dotfile_paths)?;
     Ok(())
 }
 
-fn deploy(config: Config, values: &ArgMatches) -> Result<()> {
-    println!("deploying dotfiles");
+fn deploy(config: &Config, values: &ArgMatches) -> Result<()> {
+    log::info!("deploying dotfiles");
 
     if values.is_present("all") {
         config.deploy_all()?;
@@ -116,6 +143,12 @@ fn deploy(config: Config, values: &ArgMatches) -> Result<()> {
 }
 
 fn restore(config: &mut Config, matches: &ArgMatches) -> Result<()> {
+    let dotfiles_dir: DotfilesDir = matches
+        .get_one::<String>("dotfiles_dir")
+        .and_then(|s| Some(PathBuf::from(s)))
+        .ok_or(anyhow!("must include dotfiles_dir argument"))?
+        .try_into()?;
+
     let dotfiles: Vec<PathBuf> = matches
         .values_of("dotfiles")
         .unwrap()
@@ -123,7 +156,8 @@ fn restore(config: &mut Config, matches: &ArgMatches) -> Result<()> {
         .collect();
 
     for dotfile in dotfiles.into_iter() {
-        let dotfile = paths::get_absolute(dotfile)?;
+        let dotfile: DotfilePath = (dotfiles_dir.clone(), dotfile).try_into()?;
+        log::debug!("meow");
         config.restore_dotfile(dotfile)?;
     }
 
