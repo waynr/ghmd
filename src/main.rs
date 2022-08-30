@@ -1,17 +1,17 @@
-use glob::glob;
+use std::io::Write;
 use std::path::PathBuf;
 
 use anyhow::{anyhow, Result};
 use clap::{crate_authors, crate_description, crate_name};
 use clap::{App, AppSettings, Arg, ArgMatches};
-use pretty_env_logger;
+use glob::glob;
 use log;
+use pretty_env_logger;
 
 use ghmd::Config;
 use ghmd::{DotfilePath, DotfilesDir, SymlinkDir};
 
 fn main() -> Result<()> {
-    pretty_env_logger::init();
     let stow_subcommand = App::new("stow")
         .about(
             "store input files in the specified dotfiles directory, and replace the file's \
@@ -79,8 +79,36 @@ fn main() -> Result<()> {
         .about(crate_description!())
         .author(crate_authors!())
         .after_help("https://github.com/waynr/ghmd")
+        .arg(
+            Arg::with_name("verbose")
+                .short('v')
+                .help("path of the dotfiles directory")
+                .action(clap::ArgAction::Count),
+        )
         .subcommands(vec![stow_subcommand, deploy_subcommand, restore_subcommand])
         .get_matches();
+
+    let verbosity = matches.get_one::<u8>("verbose").copied();
+
+    let mut logger_builder = &mut pretty_env_logger::formatted_builder();
+
+    let level = match verbosity {
+        Some(0) => log::LevelFilter::Info,
+        Some(1) => log::LevelFilter::Debug,
+        Some(_) => log::LevelFilter::Trace,
+        None => log::LevelFilter::Info,
+    };
+
+    logger_builder = logger_builder.filter_level(level);
+    if level == log::LevelFilter::Info {
+        logger_builder = logger_builder.default_format();
+        logger_builder = logger_builder.format_module_path(false);
+        logger_builder = logger_builder.format_level(false);
+        logger_builder = logger_builder.format_timestamp(None);
+    }
+
+    logger_builder.try_init()?;
+    log::debug!("verbosity set to {0}", level);
 
     let mut config = Config::load()?;
 
