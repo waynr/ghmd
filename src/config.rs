@@ -337,8 +337,10 @@ impl Config {
     /// Load a config from disk and return it to caller.
     pub fn load() -> Result<Self> {
         if let Some(config_path) = Self::get_config_file() {
-            let toml = crate::paths::read_path(&config_path)?;
-            Ok(toml::from_str(&toml)?)
+            let mut file = File::open(config_path)?;
+            let mut contents = String::new();
+            let _ = file.read_to_string(&mut contents)?;
+            Ok(toml::from_str(&contents)?)
         } else {
             Ok(Self {
                 dotfiles: Vec::new(),
