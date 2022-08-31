@@ -9,7 +9,7 @@
 It's essentially a glorified bespoke/fancy `ln` tool. It moves files/directories from path A to path B then creates a symbolic link at path A pointing to path B.
 
 Reasons you should use this tool:
-* <crickets>
+* *crickets*
 
 Reasons you shouldn't use this tool:
 
