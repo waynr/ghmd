@@ -51,6 +51,12 @@ pub enum Error {
     #[error("'{0}' already exists and doesn't point to the expected dotfile")]
     SymlinkPathAlreadyExists(path::PathBuf),
 
+    #[error("'{0}' is not a symlink")]
+    SymlinkPathIsNotASymlink(path::PathBuf),
+
+    #[error("symlink path {0} does not match dotfile path {1}")]
+    SymlinkPathDoesNotMatchDotfilePath(path::PathBuf, path::PathBuf),
+
     #[error("could not find specified dotfile: {0}")]
     DotfileNotFound(path::PathBuf),
 

@@ -142,7 +142,7 @@ impl TryFrom<(&SymlinkDir, &DotfilesDir, &PathBuf)> for DotfilePath {
         let (symlink_dir, dotfile_dir, path) = pb;
         let mut symlink_path = path.clone();
         let dotfile_path: PathBuf;
-        let mut result =  path.clone();
+        let mut result = path.clone();
 
         // check if path is absolute (starts with root)
         if symlink_path.has_root() {
@@ -204,37 +204,37 @@ impl Dotfiles {
     }
 
     pub(crate) fn restore_dotfile(&mut self, path: &DotfilePath) -> Result<Option<()>> {
-        //let df_path = (self.dotfile_directory,
+        if !self.is_dotfile(path) {
+            return Err(Error::NoMatchingDotfileConfigured(path.to_path_buf()));
+        }
 
-        // get dotfile and symlink paths. need to check in each branch if the given path belongs to
-        // this set of Dotfiles so we can gracefully return Ok(None) if not
-        let path_metadata = path.symlink_metadata()?;
-        let (dotfile_path, symlink_path): (PathBuf, PathBuf) = if path_metadata.is_symlink() {
-            let dotfile_path = fs::read_link(&**path)?;
-            let symlink_path = path.to_path_buf();
-            if !self.is_dotfile(&dotfile_path) {
-                return Ok(None);
-            }
+        let dotfile_path = self.dotfile_directory.join(path.to_path_buf());
+        let symlink_path = self.symlink_directory.join(path.to_path_buf());
 
-            (dotfile_path, symlink_path)
-        } else {
-            if !self.is_dotfile(&path.clone()) {
-                return Ok(None);
-            }
-            // strip dotfile directory
-            let symlink_path = path.strip_prefix(&*self.dotfile_directory)?;
-            // replace with home directory
-            let symlink_path = self.symlink_directory.join(symlink_path);
+        // if one of these doesn't exist then this Dotfiles doesn't handle the given path.
+        if !dotfile_path.exists() {
+            return Err(Error::PathDoesNotExist(dotfile_path.to_path_buf()));
+        }
 
-            (path.to_path_buf(), symlink_path)
-        };
+        if !symlink_path.exists() {
+            return Err(Error::PathDoesNotExist(symlink_path.to_path_buf()));
+        }
 
-        if symlink_path.exists() {
-            fs::remove_file(&symlink_path)?;
-        };
+        let symlink_metadata = symlink_path.symlink_metadata()?;
+        if !symlink_metadata.is_symlink() {
+            return Err(Error::SymlinkPathIsNotASymlink(symlink_path.to_path_buf()));
+        }
 
+        if symlink_path.canonicalize()? != *dotfile_path {
+            return Err(Error::SymlinkPathDoesNotMatchDotfilePath(
+                symlink_path.to_path_buf(),
+                dotfile_path.to_path_buf(),
+            ));
+        }
+
+        fs::remove_file(&symlink_path)?;
         paths::move_file(&dotfile_path, &symlink_path)?;
-
+        let _ = self.paths.remove(path);
         Ok(Some(()))
     }
 
@@ -302,7 +302,10 @@ impl Dotfiles {
         log::debug!("");
         log::debug!("symlink_directory: {:?}", self.symlink_directory);
         log::debug!("symlink_path: {:?}", symlink_path);
-        log::debug!("canonicalized symlink_path: {:?}", symlink_path.canonicalize()?);
+        log::debug!(
+            "canonicalized symlink_path: {:?}",
+            symlink_path.canonicalize()?
+        );
 
         let dotfile_path = self.dotfile_directory.join(&**stow_path);
         log::debug!("");
@@ -310,14 +313,13 @@ impl Dotfiles {
         log::debug!("dotfile_path: {:?}", dotfile_path);
 
         if dotfile_path.try_exists()? {
-            if symlink_path.canonicalize()? == dotfile_path
-            {
+            if symlink_path.canonicalize()? == dotfile_path {
                 log::debug!("");
                 log::debug!("path already stowed: {:?}", stow_path);
                 return Ok(());
             }
 
-            return Err(Error::DotfilePathAlreadyExists(stow_path.to_path_buf()))
+            return Err(Error::DotfilePathAlreadyExists(stow_path.to_path_buf()));
         }
 
         let _ = symlink_path.try_exists()?;
@@ -429,11 +431,24 @@ impl Config {
     /// Restores the named dotfile if it can be found in one of the configured dotfile directories.
     pub fn restore_dotfile(&mut self, path: DotfilePath) -> Result<()> {
         for dotfiles in &mut self.dotfiles {
-            log::debug!("meow");
-            if let Some(_) = dotfiles.restore_dotfile(&path)? {
-                return Ok(());
+            log::info!(
+                "attempting to restore {:?} from {:?}",
+                *path,
+                *dotfiles.dotfile_directory
+            );
+            match dotfiles.restore_dotfile(&path) {
+                Ok(Some(_)) => return Ok(()),
+                Ok(None) => continue,
+                Err(e) => match e {
+                    Error::NoMatchingDotfileConfigured(_)
+                    | Error::PathDoesNotExist(_)
+                    | Error::SymlinkPathIsNotASymlink(_)
+                    | Error::SymlinkPathDoesNotMatchDotfilePath(_, _) => {
+                        log::info!("restore failed: {:?}", e,);
+                    },
+                    _ => return Err(e),
+                },
             }
-            log::debug!("meow");
         }
         Err(Error::DotfileNotFound(path.to_path_buf()))
     }
