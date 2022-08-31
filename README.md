@@ -1,12 +1,5 @@
 # ghmd - Gotta Have My Dots
 
-[//]: # (![Maintenance](https://img.shields.io/badge/maintenance-actively--developed-brightgreen.svg)
-[//]: # ([![Build Status](https://img.shields.io/endpoint.svg?url=https%3A%2F%2Factions-badge.atrox.dev%2Fjakeschurch%2Fbadm%2Fbadge&2Fbadge&label=build&logo=none)](https://actions-badge.atrox.dev/jakeschurch/badm/goto))
-[//]: # ([![Crates.io](https://img.shields.io/crates/v/badm)](https://crates.io/crates/badm))
-[//]: # ([![Documentation](https://docs.rs/badm/badge.svg)](https://docs.rs/badm))
-[//]: # (![OS Support](https://img.shields.io/badge/OS%20Support-Unix--only-orange))
-[//]: # ([![License](https://img.shields.io/crates/l/badm)](LICENSE))
-
 `badm` is "But Another [Dotfiles](https://en.wikipedia.org/wiki/Hidden_file_and_hidden_directory) Manager".
 
 ## How it works
