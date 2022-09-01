@@ -1,6 +1,6 @@
 # ghmd - Gotta Have My Dots
 
-`badm` is "But Another [Dotfiles](https://en.wikipedia.org/wiki/Hidden_file_and_hidden_directory) Manager".
+`ghmd` is a glorified symlink manager.
 
 ## How it works
 
