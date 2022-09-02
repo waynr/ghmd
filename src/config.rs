@@ -528,10 +528,7 @@ impl Config {
             .join("ghmd"))
     }
 
-    /// Save configuration variables to config file `.badm.toml`. If file cannot be found
-    /// it will be written to $HOME.
-    ///
-    /// Valid locations for file location include: `$HOME` and `$XDG_CONFIG_HOME`.
+    /// Save configuration variables to `$XDG_CONFIG_HOME/ghmd/config.toml`.
     pub fn write_toml_config(&self) -> Result<()> {
         let config_file_path = Self::config_file_path()?;
         fs::create_dir_all(

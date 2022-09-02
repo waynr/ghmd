@@ -27,13 +27,13 @@ TODO (more like TODONT)
 
 ## Commands
 
-* `badm stow <symlink_dir> <dotfiles_dir> <file>...`
+* `ghmd stow <symlink_dir> <dotfiles_dir> <file>...`
   * Move each specified `<file>...` from `<symlink_dir>` to `<dotfiles_dir>`.
     * Fail `<symlink_dir>` is not a parent path of any `<file>...` paths.
   * Create a symlink pointing to the new location in `<dotfiles_dir>` from the old location in `<symlink_dir>`.
-* `badm deploy <file>...`
+* `ghmd deploy <file>...`
   * Deploy symlinks to each `<file>...` to the configured `<symlink_dir>`.
-* `badm restore <dotfiles_dir> <file>...`
+* `ghmd restore <dotfiles_dir> <file>...`
   * Restore each specified `<file>...` from the specified `<dotfiles_dir>` to the configured `<symlink_dir>`.
 
 ## Roadmap

@@ -5,10 +5,10 @@ use thiserror::Error;
 use toml;
 use fs_extra;
 
-/// The Result type for badm.
+/// The Result type for ghmd.
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// The Error type for badm.
+/// The Error type for ghmd.
 #[derive(Error, Debug)]
 pub enum Error {
     /// Config toml is malformed.
