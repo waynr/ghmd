@@ -33,8 +33,11 @@ pub enum Error {
     #[error("unable to retrieve path device info for {0}")]
     UnableToRetrievePathDeviceInfo(path::PathBuf),
 
-    #[error("cannot determine configuration dir on this platform")]
+    #[error("cannot determine configuration directory on this platform")]
     CannotDetermineConfigDir,
+
+    #[error("cannot determine data directory on this platform")]
+    CannotDetermineDataDir,
 
     #[error("config not found")]
     ConfigNotFound,

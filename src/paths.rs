@@ -4,15 +4,16 @@ use std::io;
 use std::path::PathBuf;
 use std::os::linux::fs::MetadataExt;
 
-use crate::errors::Result;
+use crate::errors::{Error, Result};
 
 /// Read file at path src and write to created/truncated file at path dst.
 pub fn move_file(src: &PathBuf, dst: &PathBuf) -> Result<()> {
     let src_meta = src.symlink_metadata()?;
 
-    if dst.exists() && src_meta.st_dev() == dst.symlink_metadata()?.st_dev() {
-        // if src and dst are on the same filesystem, there is no need to copy bytes around at all,
-        // just rename the file
+    let dst_dir = dst.parent().ok_or(Error::UnexpectedError("unable to retrieve parent directory"))?;
+    if dst_dir.exists() && src_meta.st_dev() == dst_dir.symlink_metadata()?.st_dev() {
+        // if src and dst_dir are on the same filesystem, there is no need to copy bytes around at
+        // all, just rename the file
         fs::rename(src, dst)?;
     } else {
         if src_meta.is_symlink() || src_meta.is_file() {
@@ -45,5 +46,10 @@ pub fn create_symlink(src: &PathBuf, dst: &PathBuf) -> io::Result<()> {
 
     #[cfg(target_os = "windows")]
     use std::os::windows::fs::symlink_file as symlink;
-    symlink(src, dst)
+
+    log::debug!("deploying symlink {0} pointing to {1}", dst.display(), src.display());
+    symlink(src, dst)?;
+    log::debug!("symlink deployed");
+    Ok(())
+
 }

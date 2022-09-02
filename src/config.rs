@@ -5,7 +5,8 @@ use std::io::prelude::*;
 use std::ops::Deref;
 use std::path::PathBuf;
 
-use dirs::config_dir;
+use chrono::Local;
+use dirs::{config_dir, data_dir};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::errors::Error;
@@ -18,6 +19,9 @@ pub struct Config {
     /// Dotfiles configuration. Each `Dotfiles` corresponds to a potentially different top-level
     /// store of dotfiles.
     pub dotfiles: Vec<Dotfiles>,
+
+    #[serde(skip)]
+    backup_directory: PathBuf,
 }
 
 /// Represents a top-level container of dotfiles each containing a subset of dotfiles to be synced
@@ -261,6 +265,11 @@ impl Dotfiles {
 
         let symlink_path = self.symlink_directory.join(&**path);
         if symlink_path.exists() {
+            let md = symlink_path.symlink_metadata()?;
+            if !md.is_symlink() {
+                // will need to backup higher in the stack
+                return Err(Error::SymlinkPathIsNotASymlink(symlink_path.to_path_buf()));
+            }
             // read_link will return an error if:
             // * it is not a symbolic link
             // * it doesn't exist
@@ -280,19 +289,13 @@ impl Dotfiles {
                 ))?;
 
         if !symlink_path_dir.exists() {
+            log::debug!("creating symlink path dir {0}", symlink_path_dir.display());
             fs::create_dir_all(symlink_path_dir)?;
         }
 
         paths::create_symlink(&dotfile_path, &symlink_path)?;
 
         return Ok(());
-    }
-
-    pub(crate) fn deploy_all(&self) -> Result<()> {
-        for path in self.paths.iter() {
-            self.deploy(path)?;
-        }
-        Ok(())
     }
 
     fn stow_path(&mut self, stow_path: &DotfilePath) -> Result<()> {
@@ -338,14 +341,19 @@ impl Dotfiles {
 impl Config {
     /// Load a config from disk and return it to caller.
     pub fn load() -> Result<Self> {
+        let backup_directory = Self::data_dir()?.join(Local::now().to_rfc3339());
+        log::debug!("setting backup directory to {0}", backup_directory.display());
         if let Some(config_path) = Self::get_config_file() {
             let mut file = File::open(config_path)?;
             let mut contents = String::new();
             let _ = file.read_to_string(&mut contents)?;
-            Ok(toml::from_str(&contents)?)
+            let mut c: Self = toml::from_str(&contents)?;
+            c.backup_directory = backup_directory;
+            Ok(c)
         } else {
             Ok(Self {
                 dotfiles: Vec::new(),
+                backup_directory,
             })
         }
     }
@@ -353,6 +361,7 @@ impl Config {
     /// Deploy specified dotfiles.
     pub fn deploy_paths(&self, paths: Vec<PathBuf>) -> Result<()> {
         'paths: for path in paths.iter() {
+            log::info!("deploying {:?}", path);
             for dotfiles in &self.dotfiles {
                 let dotfile_path = match DotfilePath::try_from((
                     dotfiles.dotfile_directory.clone(),
@@ -383,7 +392,22 @@ impl Config {
     /// Deploy all dotfiles.
     pub fn deploy_all(&self) -> Result<()> {
         for dotfiles in &self.dotfiles {
-            dotfiles.deploy_all()?;
+            log::info!(
+                "deploying paths from {0} to {1}",
+                dotfiles.dotfile_directory.display(),
+                dotfiles.symlink_directory.display()
+            );
+            for path in dotfiles.paths.iter() {
+                log::info!("deploying path {0}", path.display());
+                match dotfiles.deploy(path) {
+                    Err(Error::SymlinkPathIsNotASymlink(p)) => {
+                        self.backup(&p)?;
+                        log::debug!("retrying deploy of path {0}", p.display());
+                        dotfiles.deploy(path)?;
+                    },
+                    _ => (),
+                }
+            }
         }
         Ok(())
     }
@@ -494,8 +518,14 @@ impl Config {
     fn config_file_path() -> Result<PathBuf> {
         Ok(config_dir()
             .ok_or(Error::CannotDetermineConfigDir)?
-            .join("badm")
+            .join("ghmd")
             .join("config.toml"))
+    }
+
+    fn data_dir() -> Result<PathBuf> {
+        Ok(data_dir()
+            .ok_or(Error::CannotDetermineDataDir)?
+            .join("ghmd"))
     }
 
     /// Save configuration variables to config file `.badm.toml`. If file cannot be found
@@ -509,12 +539,23 @@ impl Config {
                 .parent()
                 .ok_or(Error::CannotDetermineConfigDir)?,
         )?;
-        let toml = toml::to_string(&self).unwrap();
+        let toml = toml::to_string_pretty(&self).unwrap();
         let mut file = File::create(config_file_path)?;
 
         file.write_all(&toml.into_bytes())?;
         file.sync_data()?;
 
+        Ok(())
+    }
+
+    fn backup(&self, path: &PathBuf) -> Result<()> {
+        let backup_path = &self.backup_directory.join(
+            path.file_name()
+                .ok_or(Error::UnexpectedError("couldn't get filename from path"))?,
+        );
+        log::debug!("backing up {0} to {1}", path.display(), backup_path.display());
+        fs::create_dir_all(&self.backup_directory)?;
+        paths::move_file(path, &backup_path)?;
         Ok(())
     }
 }

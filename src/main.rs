@@ -152,8 +152,6 @@ fn stow(config: &mut Config, matches: &ArgMatches) -> Result<()> {
 }
 
 fn deploy(config: &Config, values: &ArgMatches) -> Result<()> {
-    log::info!("deploying dotfiles");
-
     if values.is_present("all") {
         config.deploy_all()?;
         return Ok(());
@@ -184,7 +182,6 @@ fn restore(config: &mut Config, matches: &ArgMatches) -> Result<()> {
 
     for dotfile in dotfiles.into_iter() {
         let dotfile: DotfilePath = (dotfiles_dir.clone(), dotfile).try_into()?;
-        log::debug!("meow");
         config.restore_dotfile(dotfile)?;
     }
 
